@@ -7,8 +7,8 @@ import {
 } from "@/lib/client-upload";
 import { DURATIONS, timingError } from "@/lib/policy";
 import type { Asset, Duration, Job, Quote, VideoKind } from "@/lib/types";
-import type { configuration } from "@/lib/config";
-type Config = ReturnType<typeof configuration> & { authenticated: boolean };
+import { creationIssues, type CreateIssue, type StudioConfig as Config } from "@/lib/create-flow";
+import { CreateReview } from "@/components/create-review";
 type Tab = "create" | "history" | "settings";
 const money = (usd: number, fx = 26000) =>
   new Intl.NumberFormat("vi-VN", {
@@ -109,11 +109,23 @@ export default function Studio() {
     [current, setCurrent] = useState<Job | null>(null),
     [consent, setConsent] = useState(false),
     [hydrated, setHydrated] = useState(false),
-    [scriptReceipt, setScriptReceipt] = useState("");
+    [scriptReceipt, setScriptReceipt] = useState(""),
+    [reviewOpen, setReviewOpen] = useState(false),
+    [focusTarget, setFocusTarget] = useState("");
   const imageInput = useRef<HTMLInputElement>(null),
     audioInput = useRef<HTMLInputElement>(null),
-    idempotency = useRef("");
+    idempotency = useRef(""),
+    actionInFlight = useRef(false);
   const allow = config?.authenticated && config.storage;
+  useEffect(() => {
+    if (!focusTarget) return;
+    const element = document.getElementById(focusTarget);
+    if (element) {
+      element.scrollIntoView({ block: "center" });
+      element.focus({ preventScroll: true });
+      setFocusTarget("");
+    }
+  }, [tab, focusTarget]);
   useEffect(() => {
     api<Config>("config")
       .then(setConfig)
@@ -204,7 +216,8 @@ export default function Studio() {
     return () => clearInterval(id);
   }, [current?.id, current?.stage]);
   async function act(name: string, fn: () => Promise<void>) {
-    if (busy) return;
+    if (actionInFlight.current) return;
+    actionInFlight.current = true;
     setBusy(name);
     setError("");
     setNotice("");
@@ -213,6 +226,7 @@ export default function Studio() {
     } catch (e) {
       setError(e instanceof Error ? e.message : "Thao tác chưa hoàn tất.");
     } finally {
+      actionInFlight.current = false;
       setBusy("");
     }
   }
@@ -272,6 +286,16 @@ export default function Studio() {
     });
   }
   async function generateScript() {
+    if (!config?.authenticated || !config.ready || !config.script) {
+      setError("Để viết lời thoại, cần đăng nhập, hoàn tất kết nối và đặt hạn mức. Xem mục DeepSeek trong thiết lập bên dưới.");
+      setTab("settings");
+      return;
+    }
+    if (topic.trim().length < 5) {
+      setError("Nhập chủ đề hoặc ý chính từ 5 ký tự để viết lời thoại.");
+      setFocusTarget("topic");
+      return;
+    }
     await act("script", async () => {
       const r = await api<{ text: string; receiptId: string }>("script", {
         topic,
@@ -284,6 +308,16 @@ export default function Studio() {
     });
   }
   async function generateVoice() {
+    if (!config?.authenticated || !config.ready || !config.voice) {
+      setError("Để tạo giọng, cần đăng nhập, kết nối Google TTS và đặt hạn mức. Bạn có thể dùng tệp giọng đọc có sẵn thay thế.");
+      setTab("settings");
+      return;
+    }
+    if (!text.trim()) {
+      setError("Nhập hoặc viết lời thoại trước khi tạo giọng.");
+      setFocusTarget("script");
+      return;
+    }
     await act("voice", async () => {
       setAudio(
         await api<Asset>("voice", {
@@ -295,8 +329,14 @@ export default function Studio() {
       invalidate();
     });
   }
-  async function getQuote() {
+  async function reviewVideo() {
+    setReviewOpen(true);
+    setConsent(false);
     await act("quote", async () => {
+      const latest = await api<Config>("config");
+      setConfig(latest);
+      if (creationIssues(latest, draft).length || activeJob) return;
+      if (quote && quote.expiresAt > Date.now() && idempotency.current) return;
       const q = await api<Quote>("quote", {
         imageId: image?.id,
         audioId: audio?.id,
@@ -311,8 +351,12 @@ export default function Studio() {
     });
   }
   async function render() {
+    if (!quote || !consent || issues.length || activeJob) return;
+    if (quote.expiresAt <= Date.now()) {
+      await reviewVideo();
+      return;
+    }
     await act("render", async () => {
-      if (!quote) return;
       const j = await api<Job>("jobs", {
         quoteId: quote.id,
         idempotencyKey: idempotency.current,
@@ -320,10 +364,35 @@ export default function Studio() {
       });
       setCurrent(j);
       setJobs((old) => [j, ...old.filter((x) => x.id !== j.id)]);
+      setReviewOpen(false);
+      setFocusTarget("job-progress");
       setNotice(
         "Đã lưu tác vụ. Bạn có thể tải lại trang và theo dõi trong lịch sử.",
       );
     });
+  }
+  function resolveIssue(action: CreateIssue["action"]) {
+    if (action === "refresh") {
+      void reviewVideo();
+      return;
+    }
+    setReviewOpen(false);
+    if (action === "settings") {
+      setTab("settings");
+      setFocusTarget("setup-title");
+    } else {
+      setTab("create");
+      setFocusTarget({ login: "password", image: "image-picker", topic: "topic", script: "script", voice: "create-voice", audio: "audio-picker", duration: "duration-choice" }[action]);
+    }
+  }
+  const draft = { image, audio, hasLocalImage: !!selectedImage, mode, source, text, duration };
+  const issues = creationIssues(config, draft);
+  const activeJob = jobs.find((job) => !["completed", "failed"].includes(job.stage));
+  function openProgress() {
+    if (activeJob) setCurrent(activeJob);
+    setReviewOpen(false);
+    setTab("create");
+    setFocusTarget("job-progress");
   }
   const voiceTiming = audio?.duration
     ? timingError(audio.duration, duration)
@@ -421,7 +490,7 @@ export default function Studio() {
             <span className="top-avatar">N</span>
           </div>
         </header>
-        <main>
+        <main className={tab === "create" ? "has-create-dock" : undefined}>
           {error && (
             <div className="feedback error" role="alert">
               {error}
@@ -446,12 +515,12 @@ export default function Studio() {
                   <strong>
                     {config.access
                       ? "Mở không gian cá nhân"
-                      : "Cần hoàn tất thiết lập"}
+                        : "Chưa thể tạo video: cần hoàn tất kết nối"}
                   </strong>
                   <small>
                     {config.access
                       ? "Đăng nhập để tải tệp và tạo video."
-                      : "Ảnh và video được giữ riêng tư. Xem các kết nối còn thiếu tại Thiết lập."}
+                      : "Studio còn thiếu cấu hình. Mở Thiết lập để xem chính xác các mục cần thêm."}
                   </small>
                 </span>
               </div>
@@ -546,6 +615,7 @@ export default function Studio() {
                       }}
                     />
                     <button
+                      id="image-picker"
                       className={
                         "dropzone " + (image || preview ? "has-image" : "")
                       }
@@ -716,12 +786,7 @@ export default function Studio() {
                         <button
                           className="secondary-button"
                           onClick={generateScript}
-                          disabled={
-                            !!busy ||
-                            !config?.ready ||
-                            !config?.script ||
-                            topic.trim().length < 5
-                          }
+                          disabled={!!busy}
                         >
                           <Icon name="spark" size={16} />
                           {busy === "script"
@@ -799,13 +864,9 @@ export default function Studio() {
                             </select>
                           </div>
                           <button
+                            id="create-voice"
                             className="secondary-button"
-                            disabled={
-                              !!busy ||
-                              !config?.ready ||
-                              !config.voice ||
-                              !text.trim()
-                            }
+                            disabled={!!busy}
                             onClick={generateVoice}
                           >
                             <Icon name="audio" size={16} />
@@ -827,12 +888,23 @@ export default function Studio() {
                           accept=".mp3,.wav,.m4a,.aac,.ogg,.flac"
                           className="sr-only"
                           aria-label="Chọn tệp giọng đọc"
-                          onChange={(e) => selectAudio(e.target.files?.[0])}
+                          onChange={(e) => {
+                            const file = e.currentTarget.files?.[0];
+                            e.currentTarget.value = "";
+                            void selectAudio(file);
+                          }}
                         />
                         <button
+                          id="audio-picker"
                           className="audio-drop"
-                          disabled={!!busy || !allow}
-                          onClick={() => audioInput.current?.click()}
+                          disabled={!!busy}
+                          onClick={() => {
+                            if (allow) audioInput.current?.click();
+                            else {
+                              setError("Cần đăng nhập và kết nối nơi lưu tệp trước khi tải giọng đọc.");
+                              setTab("settings");
+                            }
+                          }}
                         >
                           <Icon name="upload" size={22} />
                           <strong>
@@ -881,6 +953,8 @@ export default function Studio() {
                       </div>
                     </div>
                     <div
+                      id="duration-choice"
+                      tabIndex={-1}
                       className="durations"
                       role="group"
                       aria-label="Thời lượng video"
@@ -1028,21 +1102,27 @@ export default function Studio() {
                         : "Giá Phosor tham khảo ngày 15/10/2026. Chi phí hạ tầng và tỷ giá là giả định; chưa gồm phí nền, thuế và phí thẻ."}
                     </p>
                     <button
-                      className="review-button"
-                      onClick={getQuote}
-                      disabled={
-                        !!busy ||
-                        !config?.ready ||
-                        !image ||
-                        !audio ||
-                        !!voiceTiming
-                      }
+                      className="primary-button create-entry"
+                      onClick={reviewVideo}
+                      disabled={!!busy}
                     >
+                      <Icon name="play" size={20} />
                       {busy === "quote"
-                        ? "Đang kiểm tra giá…"
-                        : "Kiểm tra nội dung & chi phí"}
-                      <Icon name="arrow" size={17} />
+                        ? "Đang kiểm tra…"
+                        : "Tạo video"}
                     </button>
+                    <p className="create-hint">
+                      Bấm để kiểm tra nội dung và chi phí trước khi xác nhận.
+                    </p>
+                    {config && issues.length > 0 && (
+                      <div className="create-blocker" role="status">
+                        <strong>Chưa đủ điều kiện tạo video</strong>
+                        <p>{issues[0].message}</p>
+                        <button className="text-button" onClick={reviewVideo} disabled={!!busy}>
+                          Xem {issues.length} mục cần hoàn tất <Icon name="arrow" size={15} />
+                        </button>
+                      </div>
+                    )}
                     {quote && (
                       <div className="quote-details">
                         <p>
@@ -1054,37 +1134,11 @@ export default function Studio() {
                           <br />
                           Dự toán có hiệu lực 10 phút.
                         </p>
-                        <label className="consent">
-                          <input
-                            type="checkbox"
-                            checked={consent}
-                            onChange={(e) => setConsent(e.target.checked)}
-                          />
-                          <span>
-                            Tôi có quyền dùng ảnh, giọng này và đồng ý phần tạo
-                            video còn lại ước tính {money(quote.reserveUsd, fx)}
-                            .
-                          </span>
-                        </label>
-                        <button
-                          className="primary-button"
-                          disabled={!!busy || !consent || !config?.ready}
-                          onClick={render}
-                        >
-                          <Icon name="spark" size={18} />
-                          {busy === "render" ? "Đang gửi tác vụ…" : "Tạo video"}
-                        </button>
-                      </div>
-                    )}
-                    {!config?.ready && (
-                      <div className="locked-note">
-                        <Icon name="lock" size={14} />
-                        Chưa mở tạo có phí. Hoàn tất Thiết lập để bắt đầu.
                       </div>
                     )}
                   </div>
                   {current && (
-                    <section className="job-panel" aria-live="polite">
+                    <section id="job-progress" tabIndex={-1} className="job-panel" aria-live="polite">
                       <div className="cost-title">
                         <strong>Tiến trình video</strong>
                         <span>{current.progress}%</span>
@@ -1134,6 +1188,18 @@ export default function Studio() {
                   phiên đăng nhập
                 </span>
                 <span>Được tạo với Phosor AI</span>
+              </div>
+              <div className="create-dock" aria-label="Thao tác tạo video">
+                <div className="create-dock-content">
+                  <div>
+                    <strong>{activeJob ? "Video đang được xử lý" : `Video ${duration} giây · khung dọc`}</strong>
+                    <span>{activeJob ? activeJob.message : issues.length ? "Bấm Tạo video để xem các bước còn thiếu" : "Kiểm tra chi phí rồi xác nhận tạo"}</span>
+                  </div>
+                  <button className="primary-button create-entry" disabled={!!busy} onClick={activeJob ? openProgress : reviewVideo}>
+                    <Icon name="play" size={20} />
+                    {busy ? "Đang xử lý…" : activeJob ? "Xem tiến trình" : "Tạo video"}
+                  </button>
+                </div>
               </div>
             </>
           )}
@@ -1236,11 +1302,12 @@ export default function Studio() {
               <div className="page-intro">
                 <div>
                   <div className="eyebrow">STUDIO CỦA BẠN</div>
-                  <h1>Thiết lập kết nối</h1>
+                  <h1 id="setup-title" tabIndex={-1}>Thiết lập kết nối</h1>
                   <p>
                     Trạng thái thực tế của các thành phần để tạo và lưu video.
                   </p>
                 </div>
+                <button className="secondary-button" onClick={() => setTab("create")}>Quay lại tạo video</button>
               </div>
               <div className="settings-grid">
                 <section className="panel">
@@ -1318,17 +1385,31 @@ export default function Studio() {
                   <Icon name="settings" size={26} />
                   <h2>Hoàn tất ở Vercel</h2>
                   <p>
-                    Quản trị viên thêm khóa và cấu hình trong Settings →
-                    Environment Variables của dự án, sau đó Redeploy.
+                    Thêm các mục còn thiếu ở Vercel → Settings → Environment Variables, chọn Production, lưu rồi Redeploy. Khóa đã có không cần nhập lại.
                   </p>
+                  <ol className="setup-steps">
+                    <li><strong>Bảo vệ Studio:</strong> <code>APP_PASSWORD</code> (mật khẩu của bạn) và <code>SESSION_SECRET</code> (chuỗi ngẫu nhiên ít nhất 32 ký tự).</li>
+                    <li><strong>Lưu ảnh và kết quả:</strong> kết nối Blob ở chế độ Private để có <code>BLOB_READ_WRITE_TOKEN</code>.</li>
+                    <li><strong>Lưu tiến trình:</strong> kết nối Upstash Redis, lấy cặp <code>UPSTASH_REDIS_REST_URL</code> và <code>UPSTASH_REDIS_REST_TOKEN</code>. Cặp <code>KV_REST_API_URL</code> và <code>KV_REST_API_TOKEN</code> cũng được hỗ trợ.</li>
+                    <li><strong>Tạo video:</strong> <code>PHOSOR_API_KEY</code>{config?.phosor ? " đã có." : "."}</li>
+                    <li><strong>Tự viết lời thoại:</strong> <code>DEEPSEEK_API_KEY</code>. <strong>Văn bản thành giọng đọc:</strong> <code>GOOGLE_TTS_API_KEY</code> có quyền Cloud Text-to-Speech. Tải giọng đọc có sẵn thì không cần hai khóa này.</li>
+                    <li><strong>Cho phép chi phí:</strong> tự đặt trần USD cho <code>MAX_JOB_USD</code> (mỗi video) và <code>DAILY_BUDGET_USD</code> (mỗi ngày), rồi đặt <code>GENERATION_ENABLED</code> thành <code>true</code>. Chỉ nhập hạn mức bạn đồng ý chi.</li>
+                  </ol>
+                  <a className="secondary-button" href="https://vercel.com/dai-tai/phosor/settings/environment-variables" target="_blank" rel="noreferrer">
+                    Mở cấu hình trên Vercel <Icon name="arrow" size={16} />
+                  </a>
                   <a
-                    className="secondary-button"
+                    className="text-button"
                     href="https://github.com/nhungtran68/Phosor#triển-khai"
                     target="_blank"
                     rel="noreferrer"
                   >
                     Xem hướng dẫn cấu hình <Icon name="arrow" size={16} />
                   </a>
+                  <button className="secondary-button" disabled={!!busy} onClick={() => act("config", async () => {
+                    setConfig(await api<Config>("config"));
+                    setNotice("Đã cập nhật trạng thái kết nối. Các mục còn thiếu được ghi ở bảng bên cạnh.");
+                  })}>Kiểm tra lại kết nối</button>
                   <p>
                     Giới hạn hiện tại: {money(config?.maxJobUsd || 0, fx)}
                     /video, {money(config?.dailyBudgetUsd || 0, fx)}/ngày.
@@ -1352,6 +1433,22 @@ export default function Studio() {
               </div>
             </>
           )}
+          <CreateReview
+            open={reviewOpen}
+            busy={busy}
+            issues={issues}
+            quote={quote}
+            duration={duration}
+            consent={consent}
+            error={error}
+            hasActiveJob={!!activeJob}
+            onClose={() => setReviewOpen(false)}
+            onResolve={resolveIssue}
+            onReview={reviewVideo}
+            onConsent={setConsent}
+            onCreate={render}
+            onProgress={openProgress}
+          />
         </main>
       </div>
     </div>

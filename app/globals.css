@@ -1838,3 +1838,221 @@ select {
     transition: none !important;
   }
 }
+
+/* Keep the primary action visible at every scroll position and viewport. */
+.has-create-dock {
+  padding-bottom: calc(150px + env(safe-area-inset-bottom));
+}
+.create-entry.primary-button {
+  min-height: 50px;
+  font-size: 16px;
+  font-weight: 700;
+  padding: 12px 24px;
+}
+.create-hint {
+  margin-top: 10px;
+  font-size: 12px;
+  color: #5d6854;
+  line-height: 1.7;
+}
+.create-blocker {
+  margin-top: 16px;
+  padding: 14px;
+  border: 1px solid #e4c69f;
+  border-radius: 10px;
+  background: #fff6e8;
+  color: #70461e;
+  font-size: 12px;
+  line-height: 1.7;
+}
+.create-blocker p {
+  margin: 6px 0;
+}
+.create-blocker .text-button {
+  color: #68421b;
+  white-space: normal;
+  min-height: 44px;
+  font-size: 12px;
+}
+.create-dock {
+  position: fixed;
+  z-index: 30;
+  inset: auto 0 0 238px;
+  padding: 16px 46px calc(16px + env(safe-area-inset-bottom));
+  border-top: 1px solid #ccd7bd;
+  background: #fbfdf8;
+  box-shadow: 0 -4px 20px #20251f0c;
+}
+.create-dock-content {
+  max-width: 1418px;
+  margin: auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+}
+.create-dock-content > div {
+  min-width: 0;
+}
+.create-dock strong,
+.create-dock span {
+  display: block;
+}
+.create-dock strong {
+  font-size: 15px;
+}
+.create-dock span {
+  font-size: 12px;
+  color: #5e6c51;
+  margin-top: 3px;
+  overflow-wrap: anywhere;
+}
+.create-dock .create-entry {
+  width: auto;
+  min-width: 180px;
+  flex-shrink: 0;
+}
+.create-dialog {
+  width: min(620px, calc(100% - 32px));
+  max-height: calc(100dvh - 32px);
+  border: 1px solid #d1dcc3;
+  border-radius: 18px;
+  padding: 28px;
+  color: var(--ink);
+  background: #fff;
+  box-shadow: 0 24px 80px #12200d33;
+  overscroll-behavior: contain;
+  overflow-y: auto;
+  font-size: 14px;
+  line-height: 1.8;
+}
+.create-dialog::backdrop {
+  background: #18221199;
+}
+.dialog-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+.dialog-heading .eyebrow {
+  font-size: 11px;
+  margin-bottom: 8px;
+}
+.dialog-heading h2 {
+  font-size: 22px;
+  line-height: 1.4;
+}
+.dialog-close {
+  width: 44px;
+  height: 44px;
+  flex: 0 0 44px;
+  border: 1px solid #dfe5d8;
+  border-radius: 50%;
+  color: #384b29;
+  background: #f6f8f2;
+  font-size: 28px;
+}
+.dialog-description {
+  color: #56624b;
+  margin-bottom: 18px;
+}
+.create-issues {
+  padding: 0;
+  margin: 16px 0 0;
+  list-style: none;
+}
+.create-issues li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 0;
+  border-top: 1px solid #e5e9df;
+}
+.create-issues .secondary-button {
+  flex-shrink: 0;
+  max-width: 180px;
+  font-size: 12px;
+  min-height: 44px;
+}
+.review-error {
+  background: #fff0e4;
+  color: #77481e;
+  border-radius: 10px;
+  padding: 12px;
+  margin-bottom: 16px;
+}
+.review-total {
+  background: #f1f8e6;
+  padding: 18px;
+  border-radius: 10px;
+  margin: 20px 0;
+}
+.review-total span,
+.review-total strong {
+  display: block;
+}
+.review-total strong {
+  font-size: 30px;
+}
+.create-dialog .consent {
+  font-size: 14px;
+  color: #344727;
+  margin: 22px 0 12px;
+}
+.create-dialog .primary-button {
+  font-size: 16px;
+  min-height: 50px;
+  margin-top: 12px;
+}
+.consent-help,
+.dialog-footnote {
+  font-size: 12px;
+  color: #5e6b52;
+  margin-top: 10px;
+}
+.setup-steps {
+  padding-left: 20px;
+  font-size: 13px;
+  line-height: 1.8;
+  margin: 16px 0;
+}
+.setup-steps li {
+  margin: 0 0 14px;
+}
+.setup-steps code {
+  overflow-wrap: anywhere;
+  font-size: 12px;
+  color: #3b5629;
+}
+.setup-guide > a,
+.setup-guide > button {
+  margin: 12px 0;
+  font-size: 13px;
+  min-height: 44px;
+  white-space: normal;
+}
+@media (max-width: 1200px) {
+  .create-dock { left: 200px; padding-left: 28px; padding-right: 28px; }
+}
+@media (max-width: 900px) {
+  .create-dock { left: 80px; }
+}
+@media (max-width: 720px) {
+  .create-dock { left: 0; padding: 12px 16px calc(12px + env(safe-area-inset-bottom)); }
+  .create-dock-content { gap: 12px; }
+  .create-dock strong { font-size: 13px; }
+  .create-dock span { font-size: 11px; }
+  .create-dock .create-entry { min-width: 130px; padding: 12px; font-size: 15px; }
+  .create-dialog { padding: 20px; }
+  .dialog-heading h2 { font-size: 19px; }
+  .create-issues li { align-items: flex-start; flex-direction: column; gap: 8px; }
+  .create-issues .secondary-button { max-width: 100%; }
+}
+@media (max-width: 380px) {
+  .create-dock-content { flex-direction: column; align-items: stretch; gap: 8px; }
+  .create-dock span { display: none; }
+  .create-dock .create-entry { width: 100%; }
+}

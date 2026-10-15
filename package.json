@@ -1,0 +1,39 @@
+{
+  "name": "phosor-video-studio",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev --hostname 0.0.0.0",
+    "build": "next build",
+    "start": "next start --hostname 0.0.0.0",
+    "typecheck": "tsc --noEmit",
+    "test": "node --import tsx --test tests/*.test.ts",
+    "test:media": "node --import tsx tests/media-check.ts"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "overrides": {
+    "@workflow/core": {
+      "nanoid": "5.1.16"
+    }
+  },
+  "dependencies": {
+    "@upstash/redis": "1.39.0",
+    "@vercel/blob": "2.8.2",
+    "ffmpeg-static": "5.3.0",
+    "ffprobe-static": "3.1.0",
+    "next": "16.4.1",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
+    "sharp": "0.35.5",
+    "workflow": "5.2.2"
+  },
+  "devDependencies": {
+    "@types/node": "26.6.5",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "tsx": "4.23.15",
+    "typescript": "7.0.2"
+  }
+}

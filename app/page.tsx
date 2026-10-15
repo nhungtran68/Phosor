@@ -1,6 +1,10 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
-import { upload } from "@vercel/blob/client";
+import {
+  requestJSON as api,
+  uploadAsset,
+  fileDetails,
+} from "@/lib/client-upload";
 import { DURATIONS, timingError } from "@/lib/policy";
 import type { Asset, Duration, Job, Quote, VideoKind } from "@/lib/types";
 import type { configuration } from "@/lib/config";
@@ -12,21 +16,6 @@ const money = (usd: number, fx = 26000) =>
     currency: "VND",
     maximumFractionDigits: 0,
   }).format(usd * fx);
-async function api<T>(path: string, body?: unknown): Promise<T> {
-  const r = await fetch(
-    "/api/" + path,
-    body === undefined
-      ? { cache: "no-store" }
-      : {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(body),
-        },
-  );
-  const data = await r.json();
-  if (!r.ok) throw new Error(data.error || "Kết nối chưa thành công.");
-  return data;
-}
 function Icon({ name, size = 20 }: { name: string; size?: number }) {
   const p: Record<string, React.ReactNode> = {
     play: <path d="m9 5 11 7-11 7Z" />,
@@ -106,7 +95,8 @@ export default function Studio() {
   const [password, setPassword] = useState(""),
     [image, setImage] = useState<Asset | null>(null),
     [audio, setAudio] = useState<Asset | null>(null),
-    [preview, setPreview] = useState("");
+    [preview, setPreview] = useState(""),
+    [selectedImage, setSelectedImage] = useState<File | null>(null);
   const [mode, setMode] = useState<"auto" | "existing">("auto"),
     [source, setSource] = useState<"text" | "audio">("text"),
     [topic, setTopic] = useState(""),
@@ -232,61 +222,44 @@ export default function Studio() {
     idempotency.current = "";
     if (current?.stage === "completed") setCurrent(null);
   }
-  async function uploadFile(file: File, type: "image" | "audio") {
-    if (file.size > 20 * 1024 * 1024)
-      throw new Error("Dung lượng tệp tối đa 20 MB.");
-    const ext = file.name.split(".").pop()?.toLowerCase() || "";
-    if (
-      !(
-        type === "image"
-          ? ["jpg", "jpeg", "png", "webp"]
-          : ["mp3", "wav", "m4a", "aac", "ogg", "flac"]
-      ).includes(ext)
-    )
-      throw new Error(
-        type === "image"
-          ? "Chọn ảnh JPEG, PNG hoặc WebP."
-          : "Chọn tệp MP3, WAV, M4A, AAC, OGG hoặc FLAC.",
-      );
-    const path = `uploads/${crypto.randomUUID()}.${ext}`;
-    const mimes: Record<string, string> = {
-      jpg: "image/jpeg",
-      jpeg: "image/jpeg",
-      png: "image/png",
-      webp: "image/webp",
-      mp3: "audio/mpeg",
-      wav: "audio/wav",
-      m4a: "audio/mp4",
-      aac: "audio/aac",
-      ogg: "audio/ogg",
-      flac: "audio/flac",
-    };
-    const normalizedFile = new File([file], file.name, { type: mimes[ext] });
-    const blob = await upload(path, normalizedFile, {
-      access: "private",
-      handleUploadUrl: "/api/upload",
-      multipart: file.size > 4 * 1024 * 1024,
-    });
-    return api<Asset>("verify-upload", { pathname: blob.pathname, kind: type });
-  }
   function changeText(v: string) {
     setText(v);
     if (source === "text") setAudio(null);
     invalidate();
   }
+  async function saveImage(file: File) {
+    const latest = await api<Config>("config");
+    setConfig(latest);
+    if (!latest.authenticated) {
+      setNotice(
+        "Ảnh đã được chọn để xem trước. Đăng nhập để lưu ảnh và tạo video.",
+      );
+      return;
+    }
+    if (!latest.storage) {
+      setNotice(
+        "Ảnh đang xem trên thiết bị, chưa lưu. Hãy mở Thiết lập để hoàn tất kết nối lưu ảnh.",
+      );
+      return;
+    }
+    setImage(await uploadAsset(file, "image"));
+    setNotice("Đã tải và kiểm tra ảnh thành công.");
+  }
   async function selectImage(file?: File) {
     if (!file) return;
     await act("image", async () => {
-      const a = await uploadFile(file, "image");
-      setImage(a);
+      fileDetails(file, "image");
+      setSelectedImage(file);
+      setImage(null);
       setPreview(URL.createObjectURL(file));
       invalidate();
+      await saveImage(file);
     });
   }
   async function selectAudio(file?: File) {
     if (!file) return;
     await act("audio", async () => {
-      setAudio(await uploadFile(file, "audio"));
+      setAudio(await uploadAsset(file, "audio"));
       invalidate();
     });
   }
@@ -566,33 +539,46 @@ export default function Studio() {
                       accept="image/jpeg,image/png,image/webp"
                       className="sr-only"
                       aria-label="Chọn ảnh"
-                      onChange={(e) => selectImage(e.target.files?.[0])}
+                      onChange={(e) => {
+                        const file = e.currentTarget.files?.[0];
+                        e.currentTarget.value = "";
+                        void selectImage(file);
+                      }}
                     />
                     <button
-                      className={"dropzone " + (image ? "has-image" : "")}
-                      disabled={!!busy || !allow}
+                      className={
+                        "dropzone " + (image || preview ? "has-image" : "")
+                      }
+                      disabled={!!busy}
                       onClick={() => imageInput.current?.click()}
                       onDragOver={(e) => e.preventDefault()}
                       onDrop={(e) => {
                         e.preventDefault();
-                        if (allow) selectImage(e.dataTransfer.files[0]);
+                        if (!busy) void selectImage(e.dataTransfer.files[0]);
                       }}
                     >
-                      {image ? (
+                      {image || preview ? (
                         <>
                           <img
-                            src={preview || "/api/assets/" + image.id}
+                            src={preview || "/api/assets/" + image!.id}
                             alt="Ảnh nguồn đã chọn"
                           />
                           <div>
-                            <strong>Ảnh đã sẵn sàng</strong>
+                            <strong>
+                              {busy === "image"
+                                ? "Đang lưu và kiểm tra ảnh…"
+                                : image
+                                  ? "Ảnh đã được lưu"
+                                  : "Ảnh xem trước · chưa lưu"}
+                            </strong>
                             <span>
-                              {image.width} × {image.height} px ·{" "}
-                              {(image.bytes / 1024 / 1024).toFixed(1)} MB
+                              {image
+                                ? `${image.width} × ${image.height} px · ${(image.bytes / 1024 / 1024).toFixed(1)} MB`
+                                : selectedImage?.name}
                             </span>
                             <small>Chạm để thay ảnh</small>
                           </div>
-                          <Icon name="check" />
+                          <Icon name={image ? "check" : "image"} />
                         </>
                       ) : (
                         <>
@@ -611,6 +597,35 @@ export default function Studio() {
                         </>
                       )}
                     </button>
+                    {selectedImage && !image && (
+                      <div className="pending-upload" role="status">
+                        <p className="field-help">
+                          Ảnh đang được xem trên thiết bị. Cần lưu thành công
+                          trước khi tạo video.
+                        </p>
+                        {allow ? (
+                          <button
+                            className="secondary-button"
+                            disabled={!!busy}
+                            onClick={() =>
+                              act("image", () => saveImage(selectedImage))
+                            }
+                          >
+                            Lưu ảnh để tạo video
+                          </button>
+                        ) : (
+                          <button
+                            className="text-button"
+                            onClick={() => setTab("settings")}
+                          >
+                            {config?.authenticated
+                              ? "Hoàn tất kết nối lưu ảnh"
+                              : "Xem thiết lập và đăng nhập"}{" "}
+                            <Icon name="arrow" size={14} />
+                          </button>
+                        )}
+                      </div>
+                    )}
                     <label className="field-label" htmlFor="kind">
                       Bạn muốn tạo kiểu video nào?
                     </label>
@@ -916,10 +931,10 @@ export default function Studio() {
                           preload="metadata"
                           src={`/api/jobs/${current.id}/video`}
                         />
-                      ) : image ? (
+                      ) : image || preview ? (
                         <>
                           <img
-                            src={preview || "/api/assets/" + image.id}
+                            src={preview || "/api/assets/" + image!.id}
                             alt="Bố cục ảnh tham chiếu cho video"
                           />
                           <div className="preview-shade" />
@@ -1291,6 +1306,13 @@ export default function Studio() {
                     “Đã cấu hình” nghĩa là biến môi trường đã có; chưa xác nhận
                     khóa hợp lệ hoặc đủ số dư cho đến khi gọi API.
                   </p>
+                  {!!config?.storageMissing?.length && (
+                    <p className="timing-warning">
+                      Chưa lưu được ảnh vì thiếu:{" "}
+                      {config.storageMissing.join(", ")}. Thêm các biến vào
+                      Vercel rồi Redeploy.
+                    </p>
+                  )}
                 </section>
                 <section className="panel setup-guide">
                   <Icon name="settings" size={26} />

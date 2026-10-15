@@ -5,6 +5,7 @@ import { get, head, del } from "@vercel/blob";
 import { handleUpload, type HandleUploadBody } from "@vercel/blob/client";
 import { start, getRun } from "workflow/api";
 import { configuration, requireGeneration } from "@/lib/config";
+import { requireStorage } from "@/lib/storage-config";
 import {
   authenticated,
   requireAuth,
@@ -128,14 +129,18 @@ export async function POST(
     // Blob's authenticated completion callback has no browser cookie/origin.
     if (p[0] === "upload") {
       const body = (await req.json()) as HandleUploadBody;
+      if (body.type === "blob.generate-client-token") {
+        sameOrigin(req);
+        requireAuth(req);
+        requireStorage();
+      }
       const result = await handleUpload({
         body,
         request: req,
         onBeforeGenerateToken: async (pathname) => {
           sameOrigin(req);
           requireAuth(req);
-          if (!configuration().storage)
-            throw new Error("Chưa cấu hình lưu trữ.");
+          requireStorage();
           if (
             !/^uploads\/[a-f0-9-]{36}\.(jpg|jpeg|png|webp|mp3|wav|m4a|aac|ogg|flac)$/.test(
               pathname,
@@ -229,7 +234,7 @@ export async function POST(
     }
     requireAuth(req);
     if (p[0] === "verify-upload") {
-      if (!configuration().storage) throw new Error("Chưa cấu hình lưu trữ.");
+      requireStorage();
       const { pathname, kind } = await req.json();
       if (
         typeof pathname !== "string" ||

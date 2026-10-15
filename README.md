@@ -2,7 +2,9 @@
 
 Website cá nhân tiếng Việt: **tải ảnh → chọn lời thoại → 30/40/60 giây → duyệt nội dung và chi phí → tạo → xem và tải MP4**.
 
-**Trạng thái bàn giao 15/10/2026:** mã nguồn có thể build; chưa xác minh triển khai Vercel hoặc tạo video AI thật. Kết nối Vercel hiện trả **403 Forbidden** tại workspace `mr-tran1` (`team_5yCQ7nMxxY53LgUUY8sfIiJd`). Chưa có khóa Phosor/TTS/LLM, Redis/Blob hoặc ngân sách được cấp. Hệ thống mặc định chặn mọi thao tác tạo có phí. Không dùng kết quả giả làm video đã tạo.
+**Trạng thái 15/10/2026:** mã nguồn build được. GitHub đã nhận trạng thái Vercel “Deployment has completed” cho bản đầu ở workspace `dai-tai`; quyền API cấu hình/log vẫn trả **403 Forbidden**, nên chưa nghiệm thu upload và tạo video AI trên bản chạy thật. Không mặc định các khóa đã đúng, đủ số dư hoặc ngân sách đã được cấp. Hệ thống mặc định chặn mọi thao tác tạo có phí. Không dùng kết quả giả làm video đã tạo.
+
+**Bản sửa tải ảnh:** cho phép chọn và xem ảnh trên thiết bị trước khi đăng nhập/cấu hình cloud, phân biệt rõ ảnh chưa lưu và đã lưu. Chỉ ảnh lưu/kiểm tra thành công mới được gửi tạo video. Hiển thị chính xác lỗi cấp quyền upload và tên cấu hình còn thiếu; hỗ trợ Redis được Vercel đặt tên `KV_REST_API_URL`/`KV_REST_API_TOKEN`.
 
 ## Tính năng
 
@@ -40,7 +42,7 @@ FFMPEG_PATH=/usr/bin/ffmpeg FFPROBE_PATH=/usr/bin/ffprobe npm run test:media
 
 ## Triển khai
 
-1. Cấp lại quyền cho kết nối Vercel vào workspace **mr-tran1**. Không cần cấp thêm GitHub cho mã nguồn nếu repository đã truy cập được.
+1. Cấp quyền cho kết nối Vercel vào đúng workspace đang chứa dự án; lần tra cứu mới nhất là **dai-tai**. Không cần cấp thêm GitHub cho mã nguồn nếu repository đã truy cập được.
 2. Vercel → **Add New Project → Import `nhungtran68/Phosor`**. Framework Next.js; root là thư mục gốc repository; Node 22/24; Build `npm run build`; Install `npm ci`. Repo không phải monorepo.
 3. Bật **Settings → Environment Variables → Enable access to System Environment Variables**. Workflow 5 cần `VERCEL_DEPLOYMENT_ID` ở cả build và runtime; không tự đặt ID giả.
 4. Kết nối một **Vercel Blob store private** và **Upstash Redis**. Không tự đổi gói. Các biến máy chủ:
@@ -64,7 +66,7 @@ FFMPEG_PATH=/usr/bin/ffmpeg FFPROBE_PATH=/usr/bin/ffprobe npm run test:media
 5. Không đặt bất kỳ secret nào dưới tên `NEXT_PUBLIC_*`. Không chia sẻ key trong chat/log. Chỉ cấp các biến có phí cho môi trường đã duyệt; Preview nên giữ generation tắt.
 6. Deploy production. Kiểm READY/build log, mở URL, đăng nhập, xem trạng thái kết nối; chạy một mẫu thật **sau khi có ngân sách rõ ràng**, đối chiếu hóa đơn. Chưa có ngân sách không chạy test tính phí.
 
-Hiện không có URL Vercel đã xác minh. Lỗi 403 là từ API Vercel, không phải lỗi build. Không tự tạo workspace khác để né lỗi quyền.
+Chưa có URL ứng dụng được kiểm tra trực tiếp trong phiên làm việc. GitHub báo deploy thành công ở `dai-tai`; lỗi 403 là từ API cấu hình/log Vercel. Không tự tạo workspace khác để né lỗi quyền.
 
 ## Dùng Studio
 

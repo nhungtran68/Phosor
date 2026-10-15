@@ -1,10 +1,8 @@
 import { positiveNumber } from "./policy";
+import { storageReadiness } from "./storage-config";
 export function configuration() {
-  const storage = !!(
-    process.env.BLOB_READ_WRITE_TOKEN &&
-    process.env.UPSTASH_REDIS_REST_URL &&
-    process.env.UPSTASH_REDIS_REST_TOKEN
-  );
+  const state = storageReadiness();
+  const storage = state.ready;
   const access = !!(
     process.env.APP_PASSWORD &&
     process.env.SESSION_SECRET &&
@@ -17,6 +15,7 @@ export function configuration() {
   return {
     access,
     storage,
+    storageMissing: state.missing,
     phosor: !!process.env.PHOSOR_API_KEY,
     script: !!process.env.DEEPSEEK_API_KEY,
     voice: !!process.env.GOOGLE_TTS_API_KEY,

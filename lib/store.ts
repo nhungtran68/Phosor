@@ -1,8 +1,11 @@
 import { Redis } from "@upstash/redis";
 import type { Asset, Job, Quote } from "./types";
 import { configuration } from "./config";
+import { redisCredentials } from "./storage-config";
 export function db() {
-  return Redis.fromEnv();
+  const { url, token } = redisCredentials();
+  if (!url || !token) throw new Error("Chưa kết nối nơi lưu tiến trình Redis.");
+  return new Redis({ url, token });
 }
 export const key = (s: string) => `phosor:v1:${s}`;
 export async function asset(id: string) {

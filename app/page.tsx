@@ -103,7 +103,7 @@ export default function Studio() {
     [text, setText] = useState(""),
     [duration, setDuration] = useState<Duration>(30),
     [kind, setKind] = useState<VideoKind>("motion"),
-    [voice, setVoice] = useState("vi-VN-Standard-A");
+    [voice, setVoice] = useState("elevenlabs");
   const [quote, setQuote] = useState<Quote | null>(null),
     [jobs, setJobs] = useState<Job[]>([]),
     [current, setCurrent] = useState<Job | null>(null),
@@ -309,7 +309,7 @@ export default function Studio() {
   }
   async function generateVoice() {
     if (!config?.authenticated || !config.ready || !config.voice) {
-      setError("Để tạo giọng, cần đăng nhập, kết nối Google TTS và đặt hạn mức. Bạn có thể dùng tệp giọng đọc có sẵn thay thế.");
+      setError("Để tạo giọng, cần đăng nhập, kết nối ElevenLabs và đặt hạn mức. Bạn có thể dùng tệp giọng đọc có sẵn thay thế.");
       setTab("settings");
       return;
     }
@@ -402,7 +402,7 @@ export default function Studio() {
     voiceEstimate =
       mode === "existing" && source === "audio"
         ? 0
-        : [...text].length * 0.000004,
+        : [...text].length * (config?.elevenlabsUsdPer1000Chars || 0) / 1000,
     scriptEstimate = mode === "auto" ? 0.003 : 0;
   const totalEstimate =
     quote?.estimateUsd ??
@@ -855,12 +855,7 @@ export default function Studio() {
                                 invalidate();
                               }}
                             >
-                              <option value="vi-VN-Standard-A">
-                                Nữ · Google Standard
-                              </option>
-                              <option value="vi-VN-Standard-B">
-                                Nam · Google Standard
-                              </option>
+                              <option value="elevenlabs">ElevenLabs · Giọng đã cấu hình</option>
                             </select>
                           </div>
                           <button
@@ -1336,7 +1331,7 @@ export default function Studio() {
                       },
                       {
                         title: "Giọng đọc tiếng Việt",
-                        desc: "Google Standard · có thể dùng tệp âm thanh thay thế",
+                        desc: "ElevenLabs · có thể dùng tệp âm thanh thay thế",
                         ok: config?.voice,
                       },
                       {
@@ -1392,7 +1387,7 @@ export default function Studio() {
                     <li><strong>Lưu ảnh và kết quả:</strong> kết nối Blob ở chế độ Private để có <code>BLOB_READ_WRITE_TOKEN</code>.</li>
                     <li><strong>Lưu tiến trình:</strong> kết nối Upstash Redis, lấy cặp <code>UPSTASH_REDIS_REST_URL</code> và <code>UPSTASH_REDIS_REST_TOKEN</code>. Cặp <code>KV_REST_API_URL</code> và <code>KV_REST_API_TOKEN</code> cũng được hỗ trợ.</li>
                     <li><strong>Tạo video:</strong> <code>PHOSOR_API_KEY</code>{config?.phosor ? " đã có." : "."}</li>
-                    <li><strong>Tự viết lời thoại:</strong> <code>DEEPSEEK_API_KEY</code>. <strong>Văn bản thành giọng đọc:</strong> <code>GOOGLE_TTS_API_KEY</code> có quyền Cloud Text-to-Speech. Tải giọng đọc có sẵn thì không cần hai khóa này.</li>
+                    <li><strong>Tự viết lời thoại:</strong> <code>DEEPSEEK_API_KEY</code>. <strong>Văn bản thành giọng đọc:</strong> <code>ELEVENLABS_API_KEY</code>, <code>ELEVENLABS_VOICE_ID</code> và <code>ELEVENLABS_ESTIMATE_USD_PER_1000_CHARS</code>. Tải giọng đọc có sẵn thì không cần hai khóa này.</li>
                     <li><strong>Cho phép chi phí:</strong> tự đặt trần USD cho <code>MAX_JOB_USD</code> (mỗi video) và <code>DAILY_BUDGET_USD</code> (mỗi ngày), rồi đặt <code>GENERATION_ENABLED</code> thành <code>true</code>. Chỉ nhập hạn mức bạn đồng ý chi.</li>
                   </ol>
                   <a className="secondary-button" href="https://vercel.com/dai-tai/phosor/settings/environment-variables" target="_blank" rel="noreferrer">

@@ -38,7 +38,7 @@ export function creationIssues(config: StudioConfig | null, draft: CreateDraft):
     if (!draft.audio && !(draft.mode === "existing" && draft.source === "audio")) {
       if (draft.mode === "auto" && !draft.text.trim() && !config.script)
         setting("script-api", "Chế độ tự viết lời thoại cần kết nối DeepSeek.");
-      if (!config.voice) setting("voice-api", "Tạo giọng từ văn bản cần kết nối Google TTS. Bạn cũng có thể tải giọng đọc có sẵn.");
+      if (!config.voice) setting("voice-api", "Tạo giọng từ văn bản cần kết nối ElevenLabs. Bạn cũng có thể tải giọng đọc có sẵn.");
     }
   }
   if (!draft.image)

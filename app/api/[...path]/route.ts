@@ -400,9 +400,15 @@ export async function POST(
         Buffer.byteLength(text, "utf8") > 4000
       )
         throw new Error("Lời thoại cần từ 1 đến 4.000 byte UTF-8.");
-      if (!["vi-VN-Standard-A", "vi-VN-Standard-B"].includes(voice))
-        throw new Error("Giọng đọc không hợp lệ.");
-      const hash = digest(Buffer.from(text + voice)),
+      if (voice !== "elevenlabs")
+        throw new Error("Chỉ hỗ trợ ElevenLabs.");
+      const voiceId = process.env.ELEVENLABS_VOICE_ID!;
+      const modelId = process.env.ELEVENLABS_MODEL_ID || "eleven_multilingual_v2";
+      const estimatePerCharacter = Number(process.env.ELEVENLABS_ESTIMATE_USD_PER_1000_CHARS || 0) / 1000;
+      if (!Number.isFinite(estimatePerCharacter) || estimatePerCharacter <= 0)
+        throw new Error("Cần đặt ELEVENLABS_ESTIMATE_USD_PER_1000_CHARS theo giá gói của bạn để dự toán chi phí.");
+      const estimatedVoiceCost = [...text].length * estimatePerCharacter;
+      const hash = digest(Buffer.from(text + voiceId + modelId)),
         cached = await db().get<string>(key("voice:" + hash));
       if (cached) return json(await asset(cached));
       if (
@@ -422,32 +428,33 @@ export async function POST(
         }))
       )
         throw new Error("Yêu cầu đã được gửi; hãy chờ kết quả.");
-      await reserveAux([...text].length * 0.000004);
+      await reserveAux(estimatedVoiceCost);
       const response = await fetch(
-        "https://texttospeech.googleapis.com/v1/text:synthesize",
+        "https://api.elevenlabs.io/v1/text-to-speech/" + encodeURIComponent(voiceId),
         {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            "X-Goog-Api-Key": process.env.GOOGLE_TTS_API_KEY!,
+            "xi-api-key": process.env.ELEVENLABS_API_KEY!,
+            Accept: "audio/mpeg",
           },
           body: JSON.stringify({
-            input: { text },
-            voice: { languageCode: "vi-VN", name: voice },
-            audioConfig: { audioEncoding: "MP3", speakingRate: 1.0 },
+            text,
+            model_id: modelId,
+            output_format: "mp3_44100_128",
           }),
           signal: AbortSignal.timeout(60000),
         },
       );
       if (!response.ok)
         throw new Error(
-          `Giọng đọc trả HTTP ${response.status}; không tự gọi lại có phí.`,
+          `ElevenLabs trả HTTP ${response.status}; không tự gọi lại để tránh tính phí hai lần.`,
         );
-      const result = await response.json();
-      if (typeof result.audioContent !== "string")
-        throw new Error("Không có dữ liệu âm thanh.");
+      const audioBytes = Buffer.from(await response.arrayBuffer());
+      if (!audioBytes.length || audioBytes.length > 20 * 1024 * 1024)
+        throw new Error("ElevenLabs trả tệp âm thanh rỗng hoặc vượt giới hạn.");
       const normalized = await normalizeAudio(
-          Buffer.from(result.audioContent, "base64"),
+          audioBytes,
         ),
         id = randomUUID(),
         path = await writePrivate(
@@ -463,7 +470,7 @@ export async function POST(
         bytes: normalized.data.length,
         hash: digest(normalized.data),
         duration: normalized.duration,
-        preparationUsd: [...text].length * 0.000004,
+        preparationUsd: estimatedVoiceCost,
       };
       await saveAsset(a);
       await db().set(key("voice:" + hash), id, { ex: 86400 });

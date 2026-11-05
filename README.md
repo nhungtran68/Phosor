@@ -2,7 +2,7 @@
 
 Website cá nhân tiếng Việt: **tải ảnh → chọn lời thoại → 30/40/60 giây → duyệt nội dung và chi phí → tạo → xem và tải MP4**.
 
-**Trạng thái 15/10/2026:** website tại **https://phosor.vercel.app** trả HTTP 200. Đã đọc được cấu hình production: mới có `PHOSOR_API_KEY`; bảo vệ đăng nhập, Blob/Redis, DeepSeek, Google TTS và hạn mức chi phí chưa được cấu hình. Chưa nghiệm thu upload và tạo video AI trên bản chạy thật. Không mặc định khóa hợp lệ hoặc đủ số dư chỉ vì biến đã có. Hệ thống chặn thao tác tạo có phí khi chưa được cấu hình.
+**Trạng thái 15/10/2026:** website tại **https://phosor.vercel.app** trả HTTP 200. Đã đọc được cấu hình production: mới có `PHOSOR_API_KEY`; bảo vệ đăng nhập, Blob/Redis, DeepSeek, ElevenLabs và hạn mức chi phí chưa được cấu hình. Chưa nghiệm thu upload và tạo video AI trên bản chạy thật. Không mặc định khóa hợp lệ hoặc đủ số dư chỉ vì biến đã có. Hệ thống chặn thao tác tạo có phí khi chưa được cấu hình.
 
 **Bản sửa tải ảnh:** cho phép chọn và xem ảnh trên thiết bị trước khi đăng nhập/cấu hình cloud, phân biệt rõ ảnh chưa lưu và đã lưu. Chỉ ảnh lưu/kiểm tra thành công mới được gửi tạo video. Hiển thị chính xác lỗi cấp quyền upload và tên cấu hình còn thiếu; hỗ trợ Redis được Vercel đặt tên `KV_REST_API_URL`/`KV_REST_API_TOKEN`.
 
@@ -11,7 +11,7 @@ Website cá nhân tiếng Việt: **tải ảnh → chọn lời thoại → 30/
 ## Tính năng
 
 - Hai lựa chọn lời thoại chính: **Hệ thống tự tạo** bằng chủ đề (DeepSeek Flash, cho sửa trước TTS); **Dùng lời thoại có sẵn** bằng văn bản hoặc tệp âm thanh.
-- Giọng Việt Google Standard; tải âm thanh dùng chính giọng trong tệp, không gọi TTS.
+- Giọng Việt ElevenLabs; tải âm thanh dùng chính giọng trong tệp, không gọi TTS.
 - Phân biệt **ảnh chuyển động + thuyết minh** và **chân dung nói nhép miệng**; không gọi ghép tiếng là lip-sync.
 - 30, 40, 60 giây. H3 chia clip 4–15 giây; lấy khung cuối clip trước làm đầu vào tiếp để giảm nhảy cảnh. Wan S2V chia tại khoảng nghỉ đã đo, tối đa 161 frame/clip.
 - Trình xem ảnh, nghe giọng trước, đo thời lượng thật, từ chối audio quá dài/ngắn. Không time-stretch; chỉ thêm tối đa 3 giây im lặng ở cuối. Không lặp video để bù thiếu.
@@ -58,7 +58,10 @@ FFMPEG_PATH=/usr/bin/ffmpeg FFPROBE_PATH=/usr/bin/ffprobe npm run test:media
 | `UPSTASH_REDIS_REST_URL` | Redis REST endpoint |
 | `UPSTASH_REDIS_REST_TOKEN` | Redis REST credential |
 | `DEEPSEEK_API_KEY` | Cần cho lời thoại tự tạo; model đã kiểm tra tài liệu: `deepseek-flash` |
-| `GOOGLE_TTS_API_KEY` | Cần cho văn bản → giọng Việt; hạn chế key chỉ Cloud Text-to-Speech API ở máy chủ |
+| `ELEVENLABS_API_KEY` | API key của ElevenLabs, chỉ cấu hình máy chủ |
+| `ELEVENLABS_VOICE_ID` | ID giọng đã chọn, phải hỗ trợ tiếng Việt |
+| `ELEVENLABS_MODEL_ID` | Mặc định `eleven_multilingual_v2` |
+| `ELEVENLABS_ESTIMATE_USD_PER_1000_CHARS` | Dự toán USD / 1.000 ký tự theo gói thực tế, phải lớn hơn 0 |
 | `GENERATION_ENABLED` | Mặc định `false`; chỉ chuyển `true` sau khi chủ tài khoản duyệt ngân sách |
 | `DAILY_BUDGET_USD` | Trần dự toán giữ chỗ mỗi ngày giờ Việt Nam; mặc định 0 |
 | `MAX_JOB_USD` | Trần dự toán tạo video mỗi tác vụ; mặc định 0 |
@@ -85,3 +88,8 @@ Xem [quyết định mô hình, dự toán, nguồn và giới hạn](docs/DECIS
 Chi phí giữ chỗ là **dự toán**, không phải hóa đơn thực tế. Phosor chưa được kiểm tra trực tiếp về trường usage/actual. Khóa ứng dụng không bảo đảm chặn được hóa đơn hạ tầng vượt dự toán; cần đặt spend limit tại nhà cung cấp. Không giả định credit miễn phí hay hoàn phí thất bại. Không giải phóng ngân sách đã giữ nếu chưa đối chiếu rõ.
 
 API/ảnh/giọng và dữ liệu đều thuộc một chủ Studio. Không mở đăng ký công khai hoặc bán SaaS từ bản này. Không tự xóa tệp cũ để tránh mất kết quả ngoài ý muốn; chủ tài khoản theo dõi dung lượng và dọn theo [hướng dẫn vận hành](docs/OPERATIONS.md).
+
+
+## Chuyển giọng sang ElevenLabs (15/10/2026)
+
+Chỉ một nhà cung cấp TTS: ElevenLabs. TTS gọi từ backend, không lộ API key trong trình duyệt. Cài `ELEVENLABS_API_KEY`, `ELEVENLABS_VOICE_ID`, `ELEVENLABS_ESTIMATE_USD_PER_1000_CHARS` (>0) và tùy chọn `ELEVENLABS_MODEL_ID` trên Vercel. Đặt dự toán USD/1.000 ký tự theo gói và phân bổ thực tế, không sử dụng giá giả; nhập API key riêng qua Vercel, không qua chat. Khi thiếu những biến này, mục TTS hiển thị cần thiết lập. Lời thoại tự viết vẫn dùng DeepSeek Flash, hoàn toàn tách với TTS. Không sử dụng Google TTS nữa.
